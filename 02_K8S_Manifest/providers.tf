@@ -25,7 +25,7 @@ terraform {
   }
   backend "s3" {
     bucket = "shwatech-terraform-k8s-platform-111"
-    key    = "aws/01_helm"
+    key    = "aws/01_k8s_manifest"
     region = "us-east-1"
   }
 }
