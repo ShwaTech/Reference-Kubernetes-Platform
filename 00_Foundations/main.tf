@@ -21,7 +21,7 @@ locals {
 variable "domain" {
   description = "AWS Route53 hosted zone domain name"
   type        = string
-  default = "shwatech.dev"
+  default     = "shwatech.dev"
 }
 
 
