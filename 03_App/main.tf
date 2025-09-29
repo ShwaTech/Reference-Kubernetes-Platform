@@ -1,0 +1,127 @@
+
+
+## Create a namespace for Online Boutique workloads
+## All app resources will live in this namespace
+resource "kubernetes_namespace_v1" "onlineboutique" {
+  metadata {
+    name = "onlineboutique"
+  }
+}
+
+
+## Deploy Online Boutique using ArgoCD Application
+## Manages Helm chart sync, self-healing, and pruning
+# https://github.com/GoogleCloudPlatform/microservices-demo/tree/main
+resource "kubernetes_manifest" "app_chart" {
+  manifest = yamldecode(<<YAML
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: onlineboutique
+  namespace: argo-cd
+  annotations:
+    argocd.argoproj.io/sync-wave: "0"
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  source:
+    repoURL: us-docker.pkg.dev/online-boutique-ci/charts
+    chart: onlineboutique
+    targetRevision: 0.8.1
+    helm:
+      releaseName: onlineboutique
+      values: |
+        frontend:
+            externalService: false
+  destination:
+    namespace: onlineboutique
+    server: https://kubernetes.default.svc
+  project: default
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+      allowEmpty: false
+    syncOptions:
+      - CreateNamespace=true
+      - PrunePropagationPolicy=foreground
+      - PruneLast=true
+    retry:
+      limit: 5
+  YAML
+  )
+
+  depends_on = [
+    kubernetes_namespace_v1.onlineboutique,
+  ]
+}
+
+
+## Expose Online Boutique frontend via Ingress
+## Uses NGINX and cert-manager for HTTPS (TLS)
+resource "kubernetes_ingress_v1" "frontend" {
+  metadata {
+    name      = "frontend"
+    namespace = "onlineboutique"
+    annotations = {
+      "cert-manager.io/cluster-issuer" = "letsencrypt-prod"
+    }
+  }
+  spec {
+    ingress_class_name = "nginx"
+    tls {
+      hosts = [
+        "app.guku.io",
+      ]
+      secret_name = "app-guku-io-tls"
+    }
+    rule {
+      host = "app.Create a guku.io"
+      http {
+        path {
+          backend {
+            service {
+              name = "frontend"
+              port {
+                number = 80
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+  depends_on = [
+    kubernetes_manifest.app_chart,
+    kubernetes_namespace_v1.onlineboutique,
+  ]
+}
+
+
+## Manage secrets with External Secrets Operator
+## Pulls values from AWS Secrets Manager into K8s
+resource "kubernetes_manifest" "cluster_secret_store" {
+  manifest = yamldecode(<<YAML
+apiVersion: external-secrets.io/v1beta1
+kind: ExternalSecret
+metadata:
+  name: onlineboutique-custom-secret
+  namespace: onlineboutique
+spec:
+  refreshInterval: 1h          
+  secretStoreRef:
+    kind: ClusterSecretStore
+    name: aws-store              
+  target:
+    name: onlineboutique-custom-secret
+  data:
+    - secretKey: THE_ANSWER
+      remoteRef:
+        key: cluster-prod-k8s-platform-tutorial-secret
+  YAML
+  )
+
+  depends_on = [
+    kubernetes_namespace_v1.onlineboutique,
+  ]
+}
