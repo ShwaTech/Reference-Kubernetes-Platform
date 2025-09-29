@@ -56,7 +56,7 @@ module "cluster" {
   version = "19.20"
 
   cluster_name    = local.cluster_name
-  cluster_version = "1.27"
+  cluster_version = "1.31"
 
   cluster_endpoint_public_access = true
 
@@ -79,7 +79,7 @@ module "cluster" {
       desired_size = 2
       max_size     = 5
 
-      instance_types = ["t3.xlarge"]
+      instance_types = ["t3.medium"]
     }
   }
 
